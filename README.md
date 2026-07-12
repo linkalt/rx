@@ -1,21 +1,434 @@
-# rx — High-Performance Streaming Text Processing Engine
+# rx
 
-`rx` is an ultra-fast, memory-bounded, zero-allocation-focused pipeline processor written in C17. It provides native regex extraction, token formatting, multi-stage substring mutation, and streaming SemVer aggregation in a single execution pass.
+> A high-performance, streaming text processor designed to replace complex shell pipelines with a single executable.
 
-Unlike traditional shell pipes (`grep | sed | sort | head`) which incur heavy process-forking penalties and cross-boundary kernel buffer switching, `rx` operates strictly within a **single thread and single memory address space**. It is optimized to pull raw bytes directly off the disk or network and process massive multi-line tables, text dumps, or single-line minified payloads under flat resource caps.
+`rx` combines searching, extraction, replacement, and aggregation into a single streaming pipeline. Instead of spawning multiple processes (`grep`, `sed`, `awk`, `sort`, etc.), `rx` performs all operations in one pass while keeping memory usage low.
 
----
+The project is designed around three principles:
 
-## 🛠 Features & Engineering Breakthroughs
-
-* **JIT-Compiled Regular Expressions**: Leverages native PCRE2 Just-In-Time compilation to compile targeted match patterns into raw machine code (assembly) at initialization, enabling hardware-speed scanning.
-* **Deterministic Global Inline Matching**: Features a forced offset progression state engine that guarantees a strict forward march over lookahead sweeps. This makes inline infinite loop traps mathematically impossible—even when evaluated against chaotic alphanumeric noise (`[0-9a-z.]+`) or unescaped greedy patterns.
-* **In-Memory Pipeline Matrix**: Implements a highly modular execution array routing logic using an efficient **Copy-on-Modify** strategy. The pipeline skips heap adjustments entirely unless target strings require active formatting or layout resizing.
-* **Streaming Aggregator ($O(1)$ Space)**: Compares version elements on-the-fly using a real-time tournament logic. Lower priority components are thrown away immediately, keeping memory bounds flat whether processing 10 lines or 10 billion lines.
-* **Robust SemVer Tokenizer**: Implements a non-destructive token comparison framework that structurally parses version strings component-by-component. Natively accommodates leading zeros, character patch flags (e.g., `1.1.1a` vs `1.1.1w`), and arbitrary separator changes (`.`, `_`, `-`).
+- **Streaming** – process input without loading entire files into memory.
+- **Composable** – chain multiple operations in one pipeline.
+- **Fast** – minimize allocations and unnecessary copies.
 
 ---
 
-## 📊 Structural Architecture
+# Features
 
-Instead of handling text data byte-by-byte or allocating loose lines dynamically, `rx` pulls incoming streams into dense **128KB static page blocks** via raw system calls.
+- PCRE2 regular expressions
+- Streaming input processing
+- Multiple pipeline stages
+- Capture group extraction
+- Regex replacement
+- Aggregation stages
+- Constant memory processing
+- Zero temporary files
+- Unix pipeline friendly
+- UTF-8 safe (through PCRE2)
+
+---
+
+# Why rx?
+
+Typical shell pipelines often look like:
+
+```bash
+grep -Po 'Version:\s*\K[0-9.]+' file \
+    | sed 's/\.$//' \
+    | sort -V \
+    | tail -1
+```
+
+Each command creates:
+
+- another process
+- another parser
+- another memory buffer
+- another pipe
+
+`rx` performs the same workflow inside one executable.
+
+```bash
+cat file \
+| rx \
+    --match 'Version:\s*\K[0-9.]+' \
+    --replace '\.$' '' \
+    --max-version
+```
+
+Everything happens in a single streaming pass.
+
+---
+
+# Design Goals
+
+The project aims to be:
+
+- extremely fast
+- memory efficient
+- allocation conscious
+- predictable
+- easy to extend
+
+Unlike traditional text utilities, `rx` is built around an internal processing pipeline rather than individual commands.
+
+---
+
+# Architecture
+
+Input flows through a sequence of processing stages.
+
+```
+stdin
+   │
+   ▼
+Reader
+   │
+   ▼
+Line Parser
+   │
+   ▼
+Pipeline
+ ├── Match
+ ├── Replace
+ ├── ...
+   │
+   ▼
+Aggregator
+ ├── first
+ ├── max-version
+ └── ...
+   │
+   ▼
+stdout
+```
+
+Every line is processed independently.
+
+No stage needs to know about the others.
+
+Each stage receives a mutable string view and may:
+
+- modify it
+- reject it
+- forward it
+
+---
+
+# Processing Pipeline
+
+A pipeline consists of independent stages.
+
+For example:
+
+```
+Match
+   ↓
+Replace
+   ↓
+Aggregate
+```
+
+or
+
+```
+Match
+   ↓
+Replace
+   ↓
+Replace
+   ↓
+Replace
+   ↓
+First
+```
+
+New stages can be added without changing the execution engine.
+
+---
+
+# Streaming Model
+
+Unlike tools that repeatedly scan the same data, `rx` processes input only once.
+
+```
+Input
+ ↓
+Read block
+ ↓
+Split into lines
+ ↓
+Run pipeline
+ ↓
+Output
+```
+
+Memory usage depends primarily on:
+
+- read buffer
+- current line
+- stage contexts
+
+It does **not** depend on file size.
+
+Processing a 10 MB file and a 100 GB file uses essentially the same amount of memory.
+
+---
+
+# Current Pipeline Stages
+
+## Match
+
+Extracts text using PCRE2.
+
+Example
+
+```bash
+rx --match 'Version:\s*\K[0-9.]+'
+```
+
+Supports:
+
+- PCRE2 syntax
+- capture groups
+- `\K`
+- lookarounds
+- Unicode
+
+---
+
+## Replace
+
+Performs regex replacement.
+
+Example
+
+```bash
+rx \
+    --match 'Version:\s*\K[0-9.]+' \
+    --replace '^v' ''
+```
+
+Multiple replace stages may be chained.
+
+---
+
+## First
+
+Returns only the first successful result.
+
+Example
+
+```bash
+rx \
+    --match '[0-9.]+' \
+    --first
+```
+
+Equivalent to stopping after the first pipeline success.
+
+---
+
+## Max Version
+
+Selects the highest semantic version encountered.
+
+Example
+
+```bash
+rx \
+    --match '[0-9]+(\.[0-9]+)+' \
+    --max-version
+```
+
+Unlike lexical sorting, version components are compared numerically.
+
+Example:
+
+```
+1.9
+1.10
+1.12
+```
+
+returns
+
+```
+1.12
+```
+
+---
+
+# Example Workflows
+
+Extract versions
+
+```bash
+cat versions.txt \
+| rx --match 'Version:\s*\K[0-9.]+'
+```
+
+---
+
+Extract and normalize
+
+```bash
+cat versions.txt \
+| rx \
+    --match 'Version:\s*\K[0-9.]+' \
+    --replace '\.$' ''
+```
+
+---
+
+Find latest version
+
+```bash
+cat versions.txt \
+| rx \
+    --match '[0-9]+(\.[0-9]+)+' \
+    --max-version
+```
+
+---
+
+Extract first match only
+
+```bash
+cat log.txt \
+| rx \
+    --match 'ERROR:.*' \
+    --first
+```
+
+---
+
+# Performance Philosophy
+
+`rx` is designed to minimize unnecessary work.
+
+Instead of
+
+```
+read
+ ↓
+grep
+ ↓
+write
+ ↓
+sed
+ ↓
+write
+ ↓
+sort
+ ↓
+write
+```
+
+the program performs
+
+```
+read
+ ↓
+match
+ ↓
+replace
+ ↓
+aggregate
+ ↓
+write
+```
+
+No intermediate files.
+
+No repeated parsing.
+
+No repeated process startup.
+
+---
+
+# Memory Usage
+
+The implementation is designed for bounded memory usage.
+
+Major allocations include:
+
+- input buffer
+- regex contexts
+- pipeline contexts
+
+Memory usage remains nearly constant regardless of input size.
+
+---
+
+# Repository Layout
+
+```
+src/
+    aggregate.c
+    aggregate.h
+    match.c
+    match.h
+    pipeline.c
+    pipeline.h
+    replace.c
+    replace.h
+    string_view.c
+    string_view.h
+    main.c
+
+CMakeLists.txt
+README.md
+```
+
+---
+
+# Building
+
+Requirements
+
+- C99 compiler
+- CMake
+- PCRE2 (8-bit library)
+
+Example
+
+```bash
+mkdir build
+cd build
+
+cmake ..
+cmake --build .
+```
+
+---
+
+# Roadmap
+
+Planned features include:
+
+- additional aggregation operators
+- multiple output formats
+- field extraction
+- delimiter support
+- numeric comparisons
+- JSON extraction
+- streaming statistics
+- configurable buffering
+- colorized output
+- SIMD optimizations
+- PCRE2 JIT improvements
+- plugin pipeline stages
+
+---
+
+# Philosophy
+
+`rx` is not intended to replace every Unix text utility.
+
+Instead, it focuses on the common case where several text-processing commands are chained together. By performing those operations inside a single streaming engine, it aims to reduce process overhead, memory usage, and repeated parsing while remaining simple, composable, and predictable.
+
+---
+
+# License
+
+MIT License
