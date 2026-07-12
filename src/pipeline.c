@@ -1,34 +1,83 @@
 #include "pipeline.h"
+
+#include <stdint.h>
 #include <stdlib.h>
 
-void pipeline_init(Pipeline *p) {
+#define PIPELINE_INITIAL_CAPACITY 4
+
+void
+pipeline_init(Pipeline *p)
+{
+    if (!p)
+        return;
+
     p->stages = NULL;
     p->count = 0;
     p->capacity = 0;
 }
 
-void pipeline_add(Pipeline *p, StageFunc run, void *context) {
-    if (p->count >= p->capacity) {
-        p->capacity = p->capacity == 0 ? 4 : p->capacity * 2;
-        p->stages = realloc(p->stages, p->capacity * sizeof(PipelineStage));
-    }
-    p->stages[p->count++] = (PipelineStage){.run = run, .context = context};
-}
+bool
+pipeline_add(Pipeline *p, StageFunc run, void *context)
+{
+    if (!p)
+        return false;
 
-bool pipeline_execute(Pipeline *p, StringView *sv) {
-    for (size_t i = 0; i < p->count; i++) {
-        if (!p->stages[i].run(sv, p->stages[i].context)) {
-            return false; // Dropped by a pipeline stage
-        }
+    if (p->count == p->capacity) {
+        if (p->capacity > SIZE_MAX / 2)
+            return false;
+        size_t new_capacity =
+            (p->capacity == 0)
+                ? PIPELINE_INITIAL_CAPACITY
+                : p->capacity * 2;
+
+        if (new_capacity > SIZE_MAX / sizeof(*p->stages))
+            return false;
+
+        PipelineStage *new_stages =
+            realloc(p->stages, new_capacity * sizeof(*new_stages));
+
+        if (!new_stages)
+            return false;
+
+        p->stages = new_stages;
+        p->capacity = new_capacity;
     }
+
+    p->stages[p->count].run = run;
+    p->stages[p->count].context = context;
+    p->count++;
+
     return true;
 }
 
-void pipeline_free(Pipeline *p) {
-    if (p->stages) {
-        free(p->stages);
-        p->stages = NULL;
+bool
+pipeline_execute(Pipeline *p, StringView *sv)
+{
+    if (!p)
+        return false;
+
+    PipelineStage *stage = p->stages;
+    PipelineStage *end = stage + p->count;
+
+    while (stage != end) {
+        if (!stage->run(sv, stage->context))
+            return false;
+
+        ++stage;
     }
+
+    return true;
+}
+
+void
+pipeline_free(Pipeline *p)
+{
+    if (!p)
+        return;
+
+    free(p->stages);
+
+    p->stages = NULL;
     p->count = 0;
     p->capacity = 0;
 }

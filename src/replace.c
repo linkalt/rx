@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "replace.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,17 +12,33 @@ struct ReplaceStageCtx {
 };
 
 ReplaceStageCtx* replace_ctx_create(const char *target, const char *replacement) {
+    if (!target || !replacement || target[0] == '\0') return NULL;
+
     ReplaceStageCtx *ctx = malloc(sizeof(ReplaceStageCtx));
     if (!ctx) return NULL;
     ctx->target = strdup(target);
     ctx->replacement = strdup(replacement);
+    if (!ctx->target || !ctx->replacement) {
+        free(ctx->target);
+        free(ctx->replacement);
+        free(ctx);
+        return NULL;
+    }
     ctx->target_len = strlen(target);
     ctx->replace_len = strlen(replacement);
     return ctx;
 }
 
+void replace_ctx_free(ReplaceStageCtx *ctx) {
+    if (!ctx) return;
+    free(ctx->target);
+    free(ctx->replacement);
+    free(ctx);
+}
+
 bool stage_replace(StringView *sv, void *context) {
     ReplaceStageCtx *ctx = (ReplaceStageCtx*)context;
+    if (!sv || !ctx) return false;
 
     // Quick escape check: if target string isn't inside our view, skip out early
     if (sv->length < ctx->target_len) return true;
@@ -30,6 +47,7 @@ bool stage_replace(StringView *sv, void *context) {
     size_t matches = 0;
     for (size_t i = 0; i <= sv->length - ctx->target_len; ) {
         if (memcmp(sv->ptr + i, ctx->target, ctx->target_len) == 0) {
+            if (matches == SIZE_MAX) return false;
             matches++;
             i += ctx->target_len;
         } else {
@@ -40,7 +58,16 @@ bool stage_replace(StringView *sv, void *context) {
     if (matches == 0) return true; // Nothing to change
 
     // Compute size adjustments and claim mutable memory block
-    size_t new_len = sv->length + (matches * ctx->replace_len) - (matches * ctx->target_len);
+    size_t new_len;
+    if (ctx->replace_len >= ctx->target_len) {
+        size_t growth = ctx->replace_len - ctx->target_len;
+        if (growth > 0 && matches > (SIZE_MAX - sv->length) / growth)
+            return false;
+        new_len = sv->length + matches * growth;
+    } else {
+        new_len = sv->length - matches * (ctx->target_len - ctx->replace_len);
+    }
+    if (new_len == SIZE_MAX) return false;
 
     // Allocate a scratchpad for the string transformation
     char *scratch = malloc(new_len + 1);

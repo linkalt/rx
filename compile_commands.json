@@ -1,0 +1,128 @@
+[
+ {
+  "directory": "/mydata/ai/rx-next",
+  "arguments": [
+   "/opt/compiler/bin/clang",
+   "-Iinclude",
+   "-I/opt/compiler/include",
+   "-O3",
+   "-march=znver2",
+   "-pipe",
+   "-fstack-protector-strong",
+   "-fno-plt",
+   "-fasynchronous-unwind-tables",
+   "-fomit-frame-pointer",
+   "-fstrict-aliasing",
+   "-c",
+   "src/string_view.c",
+   "-o",
+   "src/string_view.o"
+  ],
+  "file": "src/string_view.c"
+ },
+ {
+  "directory": "/mydata/ai/rx-next",
+  "arguments": [
+   "/opt/compiler/bin/clang",
+   "-Iinclude",
+   "-I/opt/compiler/include",
+   "-O3",
+   "-march=znver2",
+   "-pipe",
+   "-fstack-protector-strong",
+   "-fno-plt",
+   "-fasynchronous-unwind-tables",
+   "-fomit-frame-pointer",
+   "-fstrict-aliasing",
+   "-c",
+   "src/match.c",
+   "-o",
+   "src/match.o"
+  ],
+  "file": "src/match.c"
+ },
+ {
+  "directory": "/mydata/ai/rx-next",
+  "arguments": [
+   "/opt/compiler/bin/clang",
+   "-Iinclude",
+   "-I/opt/compiler/include",
+   "-O3",
+   "-march=znver2",
+   "-pipe",
+   "-fstack-protector-strong",
+   "-fno-plt",
+   "-fasynchronous-unwind-tables",
+   "-fomit-frame-pointer",
+   "-fstrict-aliasing",
+   "-c",
+   "src/replace.c",
+   "-o",
+   "src/replace.o"
+  ],
+  "file": "src/replace.c"
+ },
+ {
+  "directory": "/mydata/ai/rx-next",
+  "arguments": [
+   "/opt/compiler/bin/clang",
+   "-Iinclude",
+   "-I/opt/compiler/include",
+   "-O3",
+   "-march=znver2",
+   "-pipe",
+   "-fstack-protector-strong",
+   "-fno-plt",
+   "-fasynchronous-unwind-tables",
+   "-fomit-frame-pointer",
+   "-fstrict-aliasing",
+   "-c",
+   "src/aggregate.c",
+   "-o",
+   "src/aggregate.o"
+  ],
+  "file": "src/aggregate.c"
+ },
+ {
+  "directory": "/mydata/ai/rx-next",
+  "arguments": [
+   "/opt/compiler/bin/clang",
+   "-Iinclude",
+   "-I/opt/compiler/include",
+   "-O3",
+   "-march=znver2",
+   "-pipe",
+   "-fstack-protector-strong",
+   "-fno-plt",
+   "-fasynchronous-unwind-tables",
+   "-fomit-frame-pointer",
+   "-fstrict-aliasing",
+   "-c",
+   "src/pipeline.c",
+   "-o",
+   "src/pipeline.o"
+  ],
+  "file": "src/pipeline.c"
+ },
+ {
+  "directory": "/mydata/ai/rx-next",
+  "arguments": [
+   "/opt/compiler/bin/clang",
+   "-Iinclude",
+   "-I/opt/compiler/include",
+   "-O3",
+   "-march=znver2",
+   "-pipe",
+   "-fstack-protector-strong",
+   "-fno-plt",
+   "-fasynchronous-unwind-tables",
+   "-fomit-frame-pointer",
+   "-fstrict-aliasing",
+   "-c",
+   "src/main.c",
+   "-o",
+   "src/main.o"
+  ],
+  "file": "src/main.c"
+ }
+]

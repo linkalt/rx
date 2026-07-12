@@ -7,8 +7,12 @@
 typedef struct {
     const char *ptr;
     size_t length;
-    char *buf;       // Dynamically allocated only if modified
-    size_t capacity; // Allocated capacity tracker
+
+    /* Allocated only after the first mutation. */
+    char *buf;
+
+    /* Capacity of buf, including the NUL terminator. */
+    size_t capacity;
 } StringView;
 
 // Lifecycle

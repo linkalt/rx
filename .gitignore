@@ -1,10 +1,11 @@
 # Ignore compiled binaries
 rx
-
+.zed
+.cache
 # Ignore object files
 src/*.o
-
 # Ignore temporary test files or scratchpads
 massive_test.txt
 old_releases.html
 test.sh
+compile_commands.json

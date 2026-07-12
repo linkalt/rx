@@ -12,6 +12,11 @@
 
 #define BUFFER_SIZE (128 * 1024)
 
+static void free_replace_stages(Pipeline *pipeline) {
+    for (size_t i = 1; i < pipeline->count; i++)
+        replace_ctx_free(pipeline->stages[i].context);
+}
+
 int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr, "Usage: %s --match <regex> [--format <layout>] [--replace <from> <to> ...] [--max-version] [--first]\n", argv[0]);
@@ -57,8 +62,12 @@ int main(int argc, char **argv) {
         pipeline_free(&pipeline);
         return 1;
     }
-    pipeline_add(&pipeline, stage_match, match_ctx);
-
+    if (!pipeline_add(&pipeline, stage_match, match_ctx)) {
+        fprintf(stderr, "rx: failed to allocate pipeline stage\n");
+        match_ctx_free(match_ctx);
+        pipeline_free(&pipeline);
+        return EXIT_FAILURE;
+    }
     // Append standard character mutations down the layout array track
     // Inside src/main.c Pass 2 loop:
     for (int i = 1; i < argc; i++) {
@@ -67,12 +76,21 @@ int main(int argc, char **argv) {
             const char *dest = argv[++i];      // Pass the destination word arg string pointer
 
             ReplaceStageCtx *replace_ctx = replace_ctx_create(target, dest);
-            pipeline_add(&pipeline, stage_replace, replace_ctx);
+            if (!replace_ctx || !pipeline_add(&pipeline, stage_replace, replace_ctx)) {
+                fprintf(stderr, "rx: invalid replacement or failed to allocate pipeline stage\n");
+                replace_ctx_free(replace_ctx);
+                free_replace_stages(&pipeline);
+                match_ctx_free(match_ctx);
+                pipeline_free(&pipeline);
+                return EXIT_FAILURE;
+            }
         }
     }
 
-    char *buf = malloc(BUFFER_SIZE);
+    size_t buffer_capacity = BUFFER_SIZE;
+    char *buf = malloc(buffer_capacity);
     if (!buf) {
+        free_replace_stages(&pipeline);
         match_ctx_free(match_ctx);
         pipeline_free(&pipeline);
         return 1;
@@ -80,8 +98,35 @@ int main(int argc, char **argv) {
 
     size_t bytes_left = 0;
     ssize_t bytes_read;
+    bool stop = false;
+    int status = 0;
 
-    while ((bytes_read = read(STDIN_FILENO, buf + bytes_left, BUFFER_SIZE - bytes_left)) > 0) {
+    while (!stop) {
+        if (bytes_left == buffer_capacity) {
+            if (buffer_capacity > SIZE_MAX / 2) {
+                fprintf(stderr, "rx: input line is too long\n");
+                status = 1;
+                break;
+            }
+            char *next = realloc(buf, buffer_capacity * 2);
+            if (!next) {
+                fprintf(stderr, "rx: failed to grow input buffer\n");
+                status = 1;
+                break;
+            }
+            buf = next;
+            buffer_capacity *= 2;
+        }
+
+        bytes_read = read(STDIN_FILENO, buf + bytes_left, buffer_capacity - bytes_left);
+        if (bytes_read < 0) {
+            perror("rx: read");
+            status = 1;
+            break;
+        }
+        if (bytes_read == 0)
+            break;
+
         size_t total_buf_len = bytes_left + bytes_read;
         char *ptr = buf;
         char *end = buf + total_buf_len;
@@ -99,6 +144,10 @@ int main(int argc, char **argv) {
             pipeline_execute(&pipeline, &sv);
             sv_free(&sv);
             ptr = newline + 1;
+            if (aggregator.has_fired) {
+                stop = true;
+                break;
+            }
         }
 
         bytes_left = end - ptr;
@@ -107,25 +156,23 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (bytes_left > 0) {
+    if (!stop && status == 0 && bytes_left > 0) {
+        if (buf[bytes_left - 1] == '\r')
+            bytes_left--;
         StringView sv;
         sv_init(&sv, buf, bytes_left);
         pipeline_execute(&pipeline, &sv);
         sv_free(&sv);
     }
 
-    if (aggregator.mode != AGG_NONE) agg_flush(&aggregator);
+    if (status == 0 && aggregator.mode != AGG_NONE) agg_flush(&aggregator);
 
     free(buf);
     agg_free(&aggregator);
     match_ctx_free(match_ctx);
 
-    for (size_t i = 1; i < pipeline.count; i++) {
-        if (pipeline.stages[i].context) {
-            free(pipeline.stages[i].context);
-        }
-    }
+    free_replace_stages(&pipeline);
     pipeline_free(&pipeline);
 
-    return 0;
+    return status;
 }

@@ -33,7 +33,7 @@ Typical shell pipelines often look like:
 
 ```bash
 grep -Po 'Version:\s*\K[0-9.]+' file \
-    | sed 's/\.$//' \
+| sed 's/\.$//' \
     | sort -V \
     | tail -1
 ```
@@ -51,7 +51,7 @@ Each command creates:
 cat file \
 | rx \
     --match 'Version:\s*\K[0-9.]+' \
-    --replace '\.$' '' \
+    --replace '.' '' \
     --max-version
 ```
 
@@ -198,14 +198,14 @@ Supports:
 
 ## Replace
 
-Performs regex replacement.
+Performs literal text replacement (not regex replacement).
 
 Example
 
 ```bash
 rx \
     --match 'Version:\s*\K[0-9.]+' \
-    --replace '^v' ''
+    --replace 'v' ''
 ```
 
 Multiple replace stages may be chained.

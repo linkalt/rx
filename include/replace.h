@@ -6,6 +6,7 @@
 typedef struct ReplaceStageCtx ReplaceStageCtx;
 
 ReplaceStageCtx* replace_ctx_create(const char *target, const char *replacement);
+void replace_ctx_free(ReplaceStageCtx *ctx);
 bool stage_replace(StringView *sv, void *context);
 
 #endif

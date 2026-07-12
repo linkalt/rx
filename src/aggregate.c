@@ -29,26 +29,37 @@ static int compare_versions(const char *v1, size_t l1, const char *v2, size_t l2
             break;
         }
 
+        /* An additional component, numeric or alphabetic, is newer. This
+           matches OpenSSL's patch-letter versions (1.1.1w > 1.1.1). */
+        if (i >= l1) return -1;
+        if (j >= l2) return 1;
+
         // 2. Extract the numeric block for this segment
-        unsigned long long num1 = 0;
+        size_t digits1_start = i;
         bool has_num1 = false;
         while (i < l1 && v1[i] >= '0' && v1[i] <= '9') {
-            num1 = num1 * 10 + (v1[i] - '0');
             i++;
             has_num1 = true;
         }
 
-        unsigned long long num2 = 0;
+        size_t digits2_start = j;
         bool has_num2 = false;
         while (j < l2 && v2[j] >= '0' && v2[j] <= '9') {
-            num2 = num2 * 10 + (v2[j] - '0');
             j++;
             has_num2 = true;
         }
 
         // 3. Compare the numeric segments
-        if (num1 > num2) return 1;
-        if (num1 < num2) return -1;
+        if (has_num1 && has_num2) {
+            while (digits1_start < i && v1[digits1_start] == '0') digits1_start++;
+            while (digits2_start < j && v2[digits2_start] == '0') digits2_start++;
+            size_t digits1 = i - digits1_start;
+            size_t digits2 = j - digits2_start;
+            if (digits1 > digits2) return 1;
+            if (digits1 < digits2) return -1;
+            int cmp = memcmp(v1 + digits1_start, v2 + digits2_start, digits1);
+            if (cmp != 0) return cmp > 0 ? 1 : -1;
+        }
 
         // 4. Fallback check if one has a number segment and the other has alphabetical tags (e.g. 1.0 vs 1.0-beta)
         if (has_num1 != has_num2) {
@@ -85,9 +96,6 @@ void agg_process(Aggregator *agg, const StringView *sv) {
     else if (agg->mode == AGG_FIRST) {
         sv_print(sv);
         agg->has_fired = true;
-        // We exit the program instantly right here!
-        // This stops reading any further bytes from curl.
-        exit(0);
     }
 }
 
