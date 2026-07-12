@@ -1,4 +1,4 @@
-# rx
+# rx (it's AI written code)
 
 > A high-performance, streaming text processor designed to replace complex shell pipelines with a single executable.
 
