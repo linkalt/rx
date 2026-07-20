@@ -1,4 +1,5 @@
 #include "aggregate.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -8,10 +9,59 @@ void agg_init(Aggregator *agg, AggMode mode) {
     agg->best_raw = NULL;
     agg->best_len = 0;
     agg->has_fired = false;
+    agg->replace_patterns = NULL;
+}
+
+bool agg_add_replace(Aggregator *agg, const char *target, const char *replacement) {
+    ReplaceStageCtx *ctx = replace_ctx_create(target, replacement);
+    if (!ctx) return false;
+    
+    ReplacePattern *pattern = malloc(sizeof(ReplacePattern));
+    if (!pattern) {
+        replace_ctx_free(ctx);
+        return false;
+    }
+    pattern->ctx = ctx;
+    pattern->next = agg->replace_patterns;
+    agg->replace_patterns = pattern;
+    return true;
+}
+
+static void apply_replacements(Aggregator *agg, StringView *sv) {
+    ReplacePattern *pattern = agg->replace_patterns;
+    while (pattern) {
+        stage_replace(sv, pattern->ctx);
+        pattern = pattern->next;
+    }
+}
+
+void agg_flush(Aggregator *agg) {
+    if (agg->mode == AGG_MAX_VERSION && agg->best_raw) {
+        StringView sv;
+        sv_init(&sv, agg->best_raw, agg->best_len);
+        apply_replacements(agg, &sv);
+        sv_print(&sv);
+        sv_free(&sv);
+    }
+}
+
+void agg_free(Aggregator *agg) {
+    if (agg->best_raw) {
+        free(agg->best_raw);
+        agg->best_raw = NULL;
+    }
+    ReplacePattern *pattern = agg->replace_patterns;
+    while (pattern) {
+        ReplacePattern *next = pattern->next;
+        replace_ctx_free(pattern->ctx);
+        free(pattern);
+        pattern = next;
+    }
+    agg->replace_patterns = NULL;
 }
 
 // Low-overhead natural version comparison algorithm (e.g., 1.10 > 1.9)
-static int compare_versions(const char *v1, size_t l1, const char *v2, size_t l2) {
+int compare_versions(const char *v1, size_t l1, const char *v2, size_t l2) {
     size_t i = 0, j = 0;
 
     while (i < l1 || j < l2) {
@@ -68,7 +118,8 @@ static int compare_versions(const char *v1, size_t l1, const char *v2, size_t l2
 
         // 5. Handle non-numeric text tags if present (e.g., 'alpha' vs 'beta')
         if (i < l1 && j < l2 && !(v1[i] >= '0' && v1[i] <= '9') && !(v2[j] >= '0' && v2[j] <= '9')) {
-            while (i < l1 && j < l2 && v1[i] != '.' && v2[j] != '.') {
+            while (i < l1 && j < l2 && v1[i] != '.' && v2[j] != '.' &&
+                   !(v1[i] >= '0' && v1[i] <= '9') && !(v2[j] >= '0' && v2[j] <= '9')) {
                 if (v1[i] != v2[j]) {
                     return (v1[i] > v2[j]) ? 1 : -1;
                 }
@@ -80,34 +131,29 @@ static int compare_versions(const char *v1, size_t l1, const char *v2, size_t l2
     return 0;
 }
 
-void agg_process(Aggregator *agg, const StringView *sv) {
+bool agg_process(Aggregator *agg, const StringView *sv) {
     if (agg->mode == AGG_MAX_VERSION) {
         if (!agg->best_raw || compare_versions(sv->ptr, sv->length, agg->best_raw, agg->best_len) > 0) {
+            if (sv->length == SIZE_MAX)
+                return false;
             char *next = realloc(agg->best_raw, sv->length + 1);
-            if (next) {
-                agg->best_raw = next;
-                agg->best_len = sv->length;
-                memcpy(agg->best_raw, sv->ptr, sv->length);
-                agg->best_raw[sv->length] = '\0';
-            }
+            if (!next)
+                return false;
+            agg->best_raw = next;
+            agg->best_len = sv->length;
+            memcpy(agg->best_raw, sv->ptr, sv->length);
+            agg->best_raw[sv->length] = '\0';
         }
     }
-    // NEW: Handle --first logic by printing immediately and signaling exit
+    // NEW: Handle --first logic by applying replacements and printing immediately
     else if (agg->mode == AGG_FIRST) {
-        sv_print(sv);
+        StringView temp_sv;
+        sv_init(&temp_sv, sv->ptr, sv->length);
+        apply_replacements(agg, &temp_sv);
+        sv_print(&temp_sv);
+        sv_free(&temp_sv);
         agg->has_fired = true;
     }
-}
 
-void agg_flush(Aggregator *agg) {
-    if (agg->mode == AGG_MAX_VERSION && agg->best_raw) {
-        printf("%s\n", agg->best_raw);
-    }
-}
-
-void agg_free(Aggregator *agg) {
-    if (agg->best_raw) {
-        free(agg->best_raw);
-        agg->best_raw = NULL;
-    }
+    return true;
 }

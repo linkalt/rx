@@ -3,16 +3,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <stdalign.h>
 
 #define SV_MIN_CAPACITY 64
+#define SV_ALIGNMENT 32  /* 32-byte alignment for AVX2 vector loads/stores */
 
 static size_t
 sv_initial_capacity(size_t len)
 {
+    /* Guard against overflow when computing len + 1. */
+    if (len >= SIZE_MAX - 1)
+        return SIZE_MAX;
+
     size_t cap = len + 1;
 
     if (cap < SV_MIN_CAPACITY)
         cap = SV_MIN_CAPACITY;
+
+    /* Round up to alignment boundary */
+    if (cap % SV_ALIGNMENT != 0)
+        cap = ((cap + SV_ALIGNMENT - 1) / SV_ALIGNMENT) * SV_ALIGNMENT;
 
     return cap;
 }
@@ -54,7 +65,8 @@ sv_ensure_mutable(StringView *sv)
 
     sv->capacity = sv_initial_capacity(sv->length);
 
-    sv->buf = malloc(sv->capacity);
+    /* Use aligned allocation for AVX2-friendly memory access */
+    sv->buf = aligned_alloc(SV_ALIGNMENT, sv->capacity);
     if (!sv->buf) {
         sv->capacity = 0;
         return false;

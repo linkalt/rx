@@ -14,15 +14,16 @@ The project is designed around three principles:
 
 # Features
 
-- PCRE2 regular expressions
-- Streaming input processing
-- Multiple pipeline stages
-- Capture group extraction
-- Regex replacement
-- Aggregation stages
-- Constant memory processing
+- PCRE2 regular expressions (full syntax including capture groups, `\K`, lookarounds, Unicode)
+- Streaming input processing (constant memory regardless of file size)
+- Multiple pipeline stages (match → replace → replace → … → aggregate)
+- Capture group extraction with custom format strings (`--format`)
+- Literal-string replacement (not regex replacement) with `--replace`
+- Aggregation stages: `--first`, `--max-version`
+- SIMD-accelerated literal search (SSE4.2 / AVX2 via runtime CPU detection)
+- PCRE2 JIT compilation for regex
 - Zero temporary files
-- Unix pipeline friendly
+- Unix pipeline friendly (reads stdin, writes stdout)
 - UTF-8 safe (through PCRE2)
 
 ---
@@ -81,26 +82,59 @@ Input flows through a sequence of processing stages.
 stdin
    │
    ▼
-Reader
-   │
-   ▼
-Line Parser
+Line Splitter (memchr on '\n')
    │
    ▼
 Pipeline
- ├── Match
- ├── Replace
+ ├── Match (regex or literal)
+ ├── Replace (literal)
+ ├── Replace (literal)
  ├── ...
    │
    ▼
-Aggregator
- ├── first
- ├── max-version
- └── ...
+Aggregator (first | max-version | none)
    │
    ▼
 stdout
 ```
+
+Every line is processed independently. No stage needs to know about the others. Each stage receives a mutable string view and may:
+
+- modify it
+- reject it
+- forward it
+
+---
+
+# Processing Pipeline
+
+A pipeline consists of independent stages.
+
+For example:
+
+```
+Match
+   ↓
+Replace
+   ↓
+Aggregate
+```
+
+or
+
+```
+Match
+   ↓
+Replace
+   ↓
+Replace
+   ↓
+Replace
+   ↓
+First
+```
+
+New stages can be added without changing the execution engine.
 
 Every line is processed independently.
 
@@ -143,6 +177,26 @@ First
 ```
 
 New stages can be added without changing the execution engine.
+
+---
+
+### Example --format Usage
+
+The `--format` option allows rearranging captured groups:
+
+```bash
+# Swap first and last names
+cat names.txt | rx --match '(\\w+) (\\w+)' --format '\\2,\\1'
+```
+
+This transforms `John Doe` into `Doe, John`.
+
+The format string can reference capture groups `\\1` through `\\9`:
+
+```bash
+# Extract domain from email addresses
+cat emails.txt | rx --match '\\w+@(\\w+\\.\\w+)' --format '\\1'
+```
 
 ---
 

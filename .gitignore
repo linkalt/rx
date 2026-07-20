@@ -2,10 +2,16 @@
 rx
 .zed
 .cache
+.vscode
 # Ignore object files
 src/*.o
 # Ignore temporary test files or scratchpads
 massive_test.txt
 old_releases.html
 test.sh
+# Ignore clang static analyzer output
+*.plist
+# Ignore profiling data
+*.profdata
+# Ignore generated compile database
 compile_commands.json

@@ -17,7 +17,7 @@ pipeline_init(Pipeline *p)
 }
 
 bool
-pipeline_add(Pipeline *p, StageFunc run, void *context)
+pipeline_add(Pipeline *p, StageFunc run, void *context, void (*destroy)(void *))
 {
     if (!p)
         return false;
@@ -45,6 +45,7 @@ pipeline_add(Pipeline *p, StageFunc run, void *context)
 
     p->stages[p->count].run = run;
     p->stages[p->count].context = context;
+    p->stages[p->count].destroy = destroy;
     p->count++;
 
     return true;
@@ -60,8 +61,11 @@ pipeline_execute(Pipeline *p, StringView *sv)
     PipelineStage *end = stage + p->count;
 
     while (stage != end) {
-        if (!stage->run(sv, stage->context))
+        PipelineResult res = stage->run(sv, stage->context);
+        if (res == PIPE_ERR)
             return false;
+        if (res == PIPE_CONSUME)
+            break;
 
         ++stage;
     }
@@ -75,7 +79,14 @@ pipeline_free(Pipeline *p)
     if (!p)
         return;
 
-    free(p->stages);
+    if (p->stages) {
+        for (size_t i = 0; i < p->count; ++i) {
+            if (p->stages[i].destroy && p->stages[i].context) {
+                p->stages[i].destroy(p->stages[i].context);
+            }
+        }
+        free(p->stages);
+    }
 
     p->stages = NULL;
     p->count = 0;
