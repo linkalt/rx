@@ -1,6 +1,6 @@
 [
  {
-  "directory": "/mydata/ai/rx-next",
+  "directory": "/mydata/ai/rx",
   "arguments": [
    "/opt/compiler/bin/clang",
    "-Iinclude",
@@ -21,7 +21,7 @@
   "file": "src/string_view.c"
  },
  {
-  "directory": "/mydata/ai/rx-next",
+  "directory": "/mydata/ai/rx",
   "arguments": [
    "/opt/compiler/bin/clang",
    "-Iinclude",
@@ -42,7 +42,7 @@
   "file": "src/match.c"
  },
  {
-  "directory": "/mydata/ai/rx-next",
+  "directory": "/mydata/ai/rx",
   "arguments": [
    "/opt/compiler/bin/clang",
    "-Iinclude",
@@ -63,7 +63,7 @@
   "file": "src/replace.c"
  },
  {
-  "directory": "/mydata/ai/rx-next",
+  "directory": "/mydata/ai/rx",
   "arguments": [
    "/opt/compiler/bin/clang",
    "-Iinclude",
@@ -84,7 +84,7 @@
   "file": "src/aggregate.c"
  },
  {
-  "directory": "/mydata/ai/rx-next",
+  "directory": "/mydata/ai/rx",
   "arguments": [
    "/opt/compiler/bin/clang",
    "-Iinclude",
@@ -105,7 +105,7 @@
   "file": "src/pipeline.c"
  },
  {
-  "directory": "/mydata/ai/rx-next",
+  "directory": "/mydata/ai/rx",
   "arguments": [
    "/opt/compiler/bin/clang",
    "-Iinclude",
@@ -124,5 +124,26 @@
    "src/main.o"
   ],
   "file": "src/main.c"
+ },
+ {
+  "directory": "/mydata/ai/rx",
+  "arguments": [
+   "/opt/compiler/bin/clang",
+   "-Iinclude",
+   "-I/opt/compiler/include",
+   "-O3",
+   "-march=znver2",
+   "-pipe",
+   "-fstack-protector-strong",
+   "-fno-plt",
+   "-fasynchronous-unwind-tables",
+   "-fomit-frame-pointer",
+   "-fstrict-aliasing",
+   "-c",
+   "src/simd.c",
+   "-o",
+   "src/simd.o"
+  ],
+  "file": "src/simd.c"
  }
 ]
